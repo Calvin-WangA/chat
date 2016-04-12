@@ -3,9 +3,9 @@
 <friends> 
   <friend> 
     <server ip="127.0.0.1" port="5200" flag="1"/>  
-    <self name="wangchunhong" ip="53823" port="0" flag="0"/>  
-    <wangchunhong ip="127.0.0.1" port="50081" flag="0"/>  
-    <sunli ip="127.0.0.1" port="53882" flag="0"/> 
+    <self name="sunli" ip="53823" port="0" flag="0"/>  
+    <wangchunhong ip="127.0.0.1" port="4261" flag="1"/>  
+    <sunli ip="127.0.0.1" port="4262" flag="1"/> 
   </friend>  
   <family> 
     <sister ip="111.111.111.111" port="12345" flag="0"/> 

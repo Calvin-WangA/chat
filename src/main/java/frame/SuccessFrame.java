@@ -9,9 +9,9 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseMotionAdapter;
 import java.io.File;
-import java.io.OutputStreamWriter;
-import java.io.PrintWriter;
-import java.net.Socket;
+import java.net.InetSocketAddress;
+import java.nio.channels.SocketChannel;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -37,6 +37,7 @@ import org.quartz.impl.StdSchedulerFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import util.NIOTools;
 import util.ParserFriends;
 
 /**
@@ -67,14 +68,16 @@ public class SuccessFrame extends JFrame implements Job
 
 	private File file = new File("friends.xml");
 
+	static Map<String, ChatFrame> frames;
+
 	private static Long firstTime = 0L;
 
 	/**
 	 * 登录窗口
 	 */
-	@SuppressWarnings("serial")
 	public void successFrame()
 	{
+		frames = new HashMap<String, ChatFrame>();
 		// 读取好友信息并将其显示
 		ParserFriends parser = new ParserFriends();
 		// 该map的参数为<组名，<好友名，好友信息>>
@@ -90,23 +93,74 @@ public class SuccessFrame extends JFrame implements Job
 		// 窗体居中
 		setLocationRelativeTo(null);
 		// 头
-		JPanel title = new JPanel()
-		{
+		JPanel title = new MyPanel("/image/back.jpg");
+		title.paintComponents(getGraphics());
 
-			protected void paintComponent(Graphics g)
-			{
-				ImageIcon icon = new ImageIcon(this.getClass().getResource(
-						"/image/back.jpg"));
-				Image img = icon.getImage();
-				g.drawImage(img, 0, 0, this.getWidth(), 100,
-						icon.getImageObserver());
-
-			}
-
-		};
 		title.setLayout(null);
 		title.setBorder(BorderFactory.createEtchedBorder());
 		title.setBounds(0, 0, this.getWidth(), 100);
+		getMouseClickPosition(title);
+		// 添加组件实现关闭窗口功能
+		JLabel shutdown = new JLabel("关闭");
+		shutdown.setBounds(this.getWidth() - 30, 0, 30, 30);
+		addShutDownListener(shutdown);
+		title.add(shutdown);
+		// 增加该监听器，拖动窗口
+		title.addMouseMotionListener(new DragMoveAdapter());
+
+		// 利用JPanel添加背景图片
+		final JPanel back = new MyPanel("/image/pair.jpg");
+		back.paintComponents(getGraphics());
+		back.setLayout(null);
+		back.setBounds(0, 0, this.getWidth(), this.getHeight());
+
+		JPanel panel = new JPanel();
+		panel.setLayout(null);
+		// 设置为凹边型
+		panel.setBorder(BorderFactory.createLoweredBevelBorder());
+		panel.setBounds(20, 120, 200, 300);
+		// 遍历好友，显示到登录页面
+		setUserList(panel);
+
+		back.add("North", title);
+		back.add("Center", panel);
+
+		add(back);
+		setVisible(true);
+		ListenerFileChange(panel);
+	}
+
+	/**
+	 * 继承JPanel重写设置图片的方法
+	 * 
+	 * @author CasparWang
+	 *
+	 */
+	private class MyPanel extends JPanel
+	{
+
+		private static final long serialVersionUID = 1734537877465680845L;
+
+		String imgPath = "";
+
+		MyPanel(String imgPath)
+		{
+			super();
+			this.imgPath = imgPath;
+		}
+
+		@Override
+		protected void paintComponent(Graphics g)
+		{
+			ImageIcon icon = new ImageIcon(this.getClass().getResource(imgPath));
+			Image img = icon.getImage();
+			g.drawImage(img, 0, 0, this.getWidth(), this.getHeight(), icon.getImageObserver());
+
+		}
+	}
+
+	private void getMouseClickPosition(JPanel title)
+	{
 
 		// 应该增加一个监听配置文件，当有改动时重新加载文件内容，还有更好的方法就是，每次要聊天时才去动态读取个人的地址
 		// 增加该监听器，获得初始位置
@@ -120,9 +174,10 @@ public class SuccessFrame extends JFrame implements Job
 				origin.y = e.getY();
 			}
 		});
-		// 添加组件实现关闭窗口功能
-		JLabel shutdown = new JLabel("关闭");
-		shutdown.setBounds(this.getWidth() - 30, 0, 30, 30);
+	}
+
+	public void addShutDownListener(JLabel shutdown)
+	{
 		shutdown.addMouseListener(new MouseAdapter()
 		{
 			/**
@@ -141,36 +196,15 @@ public class SuccessFrame extends JFrame implements Job
 				System.exit(0);
 			}
 		});
-		title.add(shutdown);
+	}
 
-		// 增加该监听器，拖动窗口
-		title.addMouseMotionListener(new DragMoveAdapter());
-		// 显示用户列表
-		// 利用JPanel添加背景图片
-		final JPanel back = new JPanel()
-		{
-
-			protected void paintComponent(Graphics g)
-			{
-				ImageIcon icon = new ImageIcon(this.getClass().getResource(
-						"/image/pair.jpg"));
-				Image img = icon.getImage();
-				g.drawImage(img, 0, 0, this.getWidth(), this.getHeight(),
-						icon.getImageObserver());
-
-			}
-
-		};
-		back.setLayout(null);
-		back.setBounds(0, 0, this.getWidth(), this.getHeight());
-
-		JPanel panel = new JPanel();
-		panel.setLayout(null);
-		// 设置为凹边型
-		panel.setBorder(BorderFactory.createLoweredBevelBorder());
-		panel.setBounds(20, 120, 200, 300);
-
-		// 遍历好友，显示到登录页面
+	/**
+	 * 设置用户好友列表
+	 * 
+	 * @param panel
+	 */
+	public void setUserList(JPanel panel)
+	{
 		for (Iterator<String> iter = map.keySet().iterator(); iter.hasNext();)
 		{
 
@@ -184,14 +218,6 @@ public class SuccessFrame extends JFrame implements Job
 			panel.add(name);
 			height += 30;
 		}
-
-		back.add("North", title);
-		back.add("Center", panel);
-
-		add(back);
-		setVisible(true);
-		ListenerFileChange(panel);
-
 	}
 
 	/**
@@ -207,11 +233,10 @@ public class SuccessFrame extends JFrame implements Job
 			// self是特例，第一个属性表示的是登录用户的id
 			String name = pf.getUserByName("self")[1];
 			String serverIp = pf.getUserByName("server")[1];
-			Socket socket = new Socket(serverIp, 5200);
-			PrintWriter dos = new PrintWriter(new OutputStreamWriter(
-					socket.getOutputStream()));
-			dos.println(name + ":exit");
-			dos.flush();
+			SocketChannel channel = SocketChannel.open(new InetSocketAddress(serverIp, 5200));
+
+			channel.write(NIOTools.stringToByteBuffer(name + ":exit"));
+			channel.close();
 		} catch (Exception e)
 		{
 			e.printStackTrace();
@@ -222,8 +247,7 @@ public class SuccessFrame extends JFrame implements Job
 	/**
 	 * 该方法为定时器提供的接口job的一个方法，通过在这里面实现定时要执行的逻辑
 	 */
-	public void execute(JobExecutionContext context)
-			throws JobExecutionException
+	public void execute(JobExecutionContext context) throws JobExecutionException
 	{
 		CronTrigger trigger = (CronTrigger) context.getTrigger();
 		log.info("The next fire time is " + trigger.getNextFireTime());
@@ -294,24 +318,20 @@ public class SuccessFrame extends JFrame implements Job
 						{
 							item = (JLabel) items[j];
 							p = item.getLocation();
-							if(p.x == 5 || ((item.getBackground() == Color.pink) 
-									&& (i == j + 1)))
+							if (p.x == 5 || ((item.getBackground() == Color.pink) && (i == j + 1)))
 							{
 								break;
 							}
 							// 组件位置进行替换
-							if (((item.getBackground() == Color.pink) 
-									&& (i != j + 1)))
+							if (((item.getBackground() == Color.pink) && (i != j + 1)))
 							{
 								item = (JLabel) items[j + 1];
 								p = item.getLocation();
 								panel.remove(item);
-								item.setBounds(ptemp.x, ptemp.y,
-										item.getWidth(), item.getHeight());
+								item.setBounds(ptemp.x, ptemp.y, item.getWidth(), item.getHeight());
 								items[i] = item;
 								panel.add(item);
-								temp.setBounds(p.x, p.y, temp.getWidth(),
-										temp.getHeight());
+								temp.setBounds(p.x, p.y, temp.getWidth(), temp.getHeight());
 								items[j + 1] = temp;
 								break;
 							}
@@ -342,15 +362,10 @@ public class SuccessFrame extends JFrame implements Job
 			log.info("-----------Initializing Complete----------");
 
 			log.info("-----------Starting Scheduler------------");
-			JobDetail job = JobBuilder.newJob(this.getClass())
-					.withIdentity("myJob", "group1").build();
+			JobDetail job = JobBuilder.newJob(this.getClass()).withIdentity("myJob", "group1").build();
 			// 采用cronExpression来精确指定执行的时间,参考Developer Guide
-			CronTrigger trigger = (CronTrigger) TriggerBuilder
-					.newTrigger()
-					.withIdentity("trigger", "group1")
-					.withSchedule(
-							CronScheduleBuilder.cronSchedule("0/10 * * * * ?"))
-					.build();
+			CronTrigger trigger = (CronTrigger) TriggerBuilder.newTrigger().withIdentity("trigger", "group1")
+					.withSchedule(CronScheduleBuilder.cronSchedule("0/10 * * * * ?")).build();
 			scheduler.scheduleJob(job, trigger);
 			scheduler.getContext().put("panel", panel);
 			scheduler.start();
@@ -414,8 +429,7 @@ public class SuccessFrame extends JFrame implements Job
 				// 当相等执行操作后，后面的元素都会被重构
 				if (flag)
 				{
-					item.setBounds(position.x, height, item.getWidth(),
-							item.getHeight());
+					item.setBounds(position.x, height, item.getWidth(), item.getHeight());
 					panel.add(item);
 					height += 30;
 					continue;
@@ -435,8 +449,7 @@ public class SuccessFrame extends JFrame implements Job
 						}
 
 						// 这里是展开组员，null条件为最后一个组名后没有元素的情况
-						if (null == next
-								|| (next.getLocation().x == position.x && j == 1))
+						if (null == next || (next.getLocation().x == position.x && j == 1))
 						{
 							addItem();
 							break;
@@ -470,11 +483,9 @@ public class SuccessFrame extends JFrame implements Job
 			String path = "friends.xml";
 			map = parser.parserXml(path);
 			// 得到某个分组的所以好友信息
-			final Map<String, String[]> friends = sortedByFlag(map.get(name
-					.getText()));
+			final Map<String, String[]> friends = sortedByFlag(map.get(name.getText()));
 			String key = "";
-			for (Iterator<String> iter = friends.keySet().iterator(); iter
-					.hasNext();)
+			for (Iterator<String> iter = friends.keySet().iterator(); iter.hasNext();)
 			{
 				key = iter.next();
 				String[] user = friends.get(key);
@@ -491,40 +502,66 @@ public class SuccessFrame extends JFrame implements Job
 				{
 					friend.setBackground(Color.white);
 				}
-				friend.addMouseListener(new MouseAdapter()
-				{
-					Color color = friend.getBackground();
 
-					/**
-					 * 点击对应好友，与好友进行连接并聊天
-					 */
-					@Override
-					public void mouseClicked(MouseEvent e)
-					{
-
-						String[] info = parser.getUserByName(friend.getText()
-								.trim());
-						// 传入地址建立连接,客户端在哪里监听的都是同一端口，唯一不同的就是地址,不在线不弹出框
-						ChatFrame chat = new ChatFrame(info, 12345);
-						chat.clientFrame();
-
-					};
-
-					@Override
-					public void mousePressed(MouseEvent e)
-					{
-						friend.setBackground(Color.red);
-					}
-
-					@Override
-					public void mouseReleased(MouseEvent e)
-					{
-						friend.setBackground(color);
-					}
-				});
+				addFriendClientListener(friend);
 				panel.add(friend);
 				height += 30;
 			}
+		}
+
+		public void addFriendClientListener(final JLabel friend)
+		{
+			friend.addMouseListener(new MouseAdapter()
+			{
+				Color color = friend.getBackground();
+
+				/**
+				 * 点击对应好友，与好友进行连接并聊天
+				 */
+				@SuppressWarnings("deprecation")
+				@Override
+				public void mouseClicked(MouseEvent e)
+				{
+
+					if (e.getClickCount() == 2)
+					{
+						String[] info = parser.getUserByName(friend.getText().trim());
+						ChatFrame chat = frames.get(info[0]);
+						// 传入地址建立连接,客户端在哪里监听的都是同一端口，唯一不同的就是地址,不在线不弹出框
+						try
+						{
+							if (null == chat)
+							{
+								chat = new ChatFrame(info, 12345);
+
+								frames.put(info[0], chat);
+								chat.clientFrame();
+
+							} else
+							{
+								chat.show();
+								chat.connectReceive();
+							}
+						} catch (Exception e1)
+						{
+							e1.printStackTrace();
+						}
+					}
+				};
+
+				@Override
+				public void mousePressed(MouseEvent e)
+				{
+					friend.setBackground(Color.red);
+				}
+
+				@Override
+				public void mouseReleased(MouseEvent e)
+				{
+					friend.setBackground(color);
+				}
+
+			});
 		}
 
 		@Override
@@ -550,8 +587,7 @@ public class SuccessFrame extends JFrame implements Job
 			String[] user = null;
 			String key = null;
 			// 将在线用户先放入map
-			for (Iterator<String> iter = users.keySet().iterator(); iter
-					.hasNext();)
+			for (Iterator<String> iter = users.keySet().iterator(); iter.hasNext();)
 			{
 				key = iter.next();
 				user = users.get(key);
@@ -561,8 +597,7 @@ public class SuccessFrame extends JFrame implements Job
 				}
 			}
 			// 再将不在线用户放到集合中
-			for (Iterator<String> iter = users.keySet().iterator(); iter
-					.hasNext();)
+			for (Iterator<String> iter = users.keySet().iterator(); iter.hasNext();)
 			{
 				key = iter.next();
 				user = users.get(key);
@@ -591,8 +626,7 @@ public class SuccessFrame extends JFrame implements Job
 			Point p = SuccessFrame.this.getLocation();
 			// 设置窗口的位置
 			// 窗口当前的位置 + 鼠标当前在窗口的位置 - 鼠标按下的时候在窗口的位置
-			SuccessFrame.this.setLocation(p.x + e.getX() - origin.x,
-					p.y + e.getY() - origin.y);
+			SuccessFrame.this.setLocation(p.x + e.getX() - origin.x, p.y + e.getY() - origin.y);
 		}
 
 	}

@@ -6,11 +6,8 @@ import java.awt.Graphics;
 import java.awt.Image;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
-import java.io.PrintWriter;
-import java.net.Socket;
+import java.net.InetSocketAddress;
+import java.nio.channels.SocketChannel;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,9 +20,10 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
 
-import util.ParserFriends;
-
 import com.google.gson.Gson;
+
+import util.NIOTools;
+import util.ParserFriends;
 
 /**
  * 用户登录程序，做一下两个步骤 发送登录数据，并接受服务器的返回数据，更新信息
@@ -119,16 +117,16 @@ public class LoginFrame extends JFrame {
 		try {
 			ParserFriends pf = new ParserFriends();
 			String[] info = pf.getUserByName("server");
-			Socket socket = new Socket(info[1], 5200);
-			PrintWriter dos = new PrintWriter(new OutputStreamWriter(
-					socket.getOutputStream()));
-			BufferedReader dis = new BufferedReader(new InputStreamReader(
-					socket.getInputStream()));
-			dos.println(user);
-			dos.flush();
+			SocketChannel  channel = SocketChannel.open(
+					new InetSocketAddress(info[1], 5200));
+			while(!channel.finishConnect())
+			{
+				//doSomething
+			}
+			channel.write(NIOTools.stringToByteBuffer(user));
 			// 获得返回数据进行设置
 			Gson gson = new Gson();
-			String users = dis.readLine().trim();
+			String users = NIOTools.byteBufferToString(channel).trim();
 			//gson转换的map为<string,List>
 			@SuppressWarnings("unchecked")
 			Map<String,List<String>> map = gson.fromJson(users, LinkedHashMap.class);

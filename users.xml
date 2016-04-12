@@ -2,7 +2,7 @@
 
 <users> 
   <self ip="127.0.0.1" port="53823" flag="0"/>  
-  <wangchunhong ip="127.0.0.1" port="50081" flag="0"/>  
-  <sunli ip="127.0.0.1" port="53882" flag="0"/>  
+  <wangchunhong ip="127.0.0.1" port="4261" flag="1"/>  
+  <sunli ip="127.0.0.1" port="4269" flag="0"/>  
   <sister ip="111.111.111.111" port="12345" flag="0"/> 
 </users>

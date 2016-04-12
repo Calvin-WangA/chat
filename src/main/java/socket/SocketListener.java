@@ -79,7 +79,7 @@ public class SocketListener {
 						System.exit(0);
 					}
 				} else {
-					server = new ServerFrame(socket);
+					//server = new ServerFrame(socket);
 					server.serverFrame(info[0]);
 				}
 

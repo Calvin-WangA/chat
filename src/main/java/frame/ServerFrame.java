@@ -8,34 +8,30 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.PrintWriter;
-import java.net.Socket;
-import java.util.Date;
+import java.nio.channels.SocketChannel;
 
+import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 
+import util.NIOTools;
 import util.ParserFriends;
+import util.Tools;
 
-@SuppressWarnings("deprecation")
-public class ServerFrame extends JFrame {
+public class ServerFrame extends JFrame
+{
 
 	/**
 	 * 
 	 */
 	private static final long serialVersionUID = 12323352L;
 
-	private Socket socket = null;
-
-	private PrintWriter dos = null;
-
-	private BufferedReader in = null;
+	private SocketChannel channel = null;
 
 	final JTextArea text = new JTextArea(6, 40);
 
@@ -44,45 +40,57 @@ public class ServerFrame extends JFrame {
 	private boolean flag = true;
 
 	private String[] info;
-	
-	private String self;
-	public ServerFrame(Socket socket)
-	{
-		this.socket = socket;
-		try {
-			dos = new PrintWriter(socket.getOutputStream());
-			in = new BufferedReader(new InputStreamReader(
-					socket.getInputStream()));
 
-		} catch (IOException e1) {
-			e1.printStackTrace();
-		}
+	private String self;
+
+	public ServerFrame(final SocketChannel channel)
+	{
+		this.channel = channel;
 		ParserFriends pf = new ParserFriends();
-		
-		this.info = pf.getUserByIp(socket.getInetAddress().getHostAddress());
-		//本机ip地址的获取方式InetAddress.getLocalHost().getHostAddress()
-		//监听到的对方的ip获取方式socket.getInetAddress().getHostAddress()
-		if(null == info)
+		this.info = pf.getUserByIp(channel.socket()
+				.getInetAddress().getHostAddress());
+		// 本机ip地址的获取方式InetAddress.getLocalHost().getHostAddress()
+		// 监听到的对方的ip获取方式socket.getInetAddress().getHostAddress()
+		if (null == info)
 		{
-			info = new String[]{"好友"};
+			info = new String[] { "好友" };
 		}
 		self = pf.getUserByName("self")[1];
+		/**
+		 * 重写窗体关闭事件，同时关闭socket连接
+		 */
+		addWindowListener(new WindowAdapter()
+		{
+			@Override
+			public void windowClosed(WindowEvent e)
+			{
+
+				super.windowClosed(e);
+				try
+				{
+					channel.close();
+				} catch (IOException e1)
+				{
+					e1.printStackTrace();
+				}
+			}
+		});
 	}
+
 	/**
 	 * 服务器窗口
 	 */
-	public void serverFrame(String info) {
-		
+	public void serverFrame(String info) throws Exception
+	{
 
-		if(null == this.info)
+		if (null == this.info)
 		{
 			setTitle("好友");
-		}
-		else
+		} else
 		{
 			setTitle(this.info[0]);
 		}
-		
+
 		// setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		setSize(400, 500);
 		// 窗体居中
@@ -98,9 +106,11 @@ public class ServerFrame extends JFrame {
 		showText.setLineWrap(true);
 		showText.setAutoscrolls(true);
 		showText.setEditable(false);
+		JScrollPane scrollShow = new JScrollPane(showText);
+		scrollShow.setBorder(BorderFactory.createEmptyBorder());
 		JLabel label = new JLabel();
 		label.setBackground(Color.blue);
-		nPanel.add("North", showText);
+		nPanel.add("North", scrollShow);
 		nPanel.add("South", label);
 
 		JPanel cPanel = new JPanel();
@@ -108,23 +118,20 @@ public class ServerFrame extends JFrame {
 		cPanel.setSize(200, 100);
 		text.setLineWrap(true);
 		text.setAutoscrolls(true);
-		cPanel.add(text);
+		JScrollPane scrollInput = new JScrollPane(text);
+		scrollInput.setBorder(BorderFactory.createEmptyBorder());
+		cPanel.add(scrollInput);
 
 		JPanel sPanel = new JPanel();
 		sPanel.setLayout(new FlowLayout(2, 10, 10));
 		sPanel.setSize(200, 100);
 		JButton send = new JButton("发送");
-		send.addActionListener(new ActionListener() {
-
-			public void actionPerformed(ActionEvent e) {
-				// 获取到文本内容，发送到服务端
-				String t = text.getText();
-				send(t);
-				// 每次点击发送后，清空文本框
-				text.setText("");
-				showText.append(self+"  "+new Date(System.currentTimeMillis()).toLocaleString()+"\n    "+t+"\n");
+		send.addActionListener(new ActionListener()
+		{
+			public void actionPerformed(ActionEvent e)
+			{
+				sendData();
 			}
-
 		});
 		JButton reset = new JButton("重置");
 		sPanel.add(send);
@@ -132,38 +139,11 @@ public class ServerFrame extends JFrame {
 		content.add("North", nPanel);
 		content.add("Center", cPanel);
 		content.add("South", sPanel);
+
 		pack();
-
-		/**
-		 * 重写窗体关闭事件，同时关闭socket连接
-		 */
-		addWindowListener(new WindowAdapter(){
-			@Override
-			public void windowClosed(WindowEvent e) {
-				
-				super.windowClosed(e);
-				try {
-					in.close();
-					dos.close();
-					socket.close();
-				} catch (IOException e1) {
-					e1.printStackTrace();
-				}
-			}
-		});
 		setVisible(true);
-
-		//设置发送的第一条消息
-		showText.append(this.info[0]+"  "+new Date(System.currentTimeMillis()).toLocaleString()+"\n    "+info+"\n");
-		while (flag) {
-			try {
-				receiver();
-			} catch (Exception e1) {
-			
-				flag = false;
-				e1.printStackTrace();
-			}
-		}
+		
+		receiver(info);
 	}
 
 	/**
@@ -171,16 +151,22 @@ public class ServerFrame extends JFrame {
 	 * 
 	 * @param content
 	 */
-	public void send(String content) {
-		try {
+	public void sendData()
+	{
+		// 获取到文本内容，发送到服务端
+		String t = text.getText();
+		try
+		{
+			channel.write(NIOTools.stringToByteBuffer(t));
+			// 每次点击发送后，清空文本框
+			text.setText("");
+			showText.append(Tools.getChatFormatString(self,t));
+			showText.setCaretPosition(showText.getText().length());
 			// 将本身的十六进制字符串转换成十六进制字节数组,再发送出去
-			dos.println(content);
-			dos.flush();
-		} catch (Exception e) {
+		} catch (Exception e)
+		{
 			e.printStackTrace();
 		}
-		// dos.println(content);
-
 	}
 
 	/**
@@ -188,19 +174,32 @@ public class ServerFrame extends JFrame {
 	 * 
 	 * @return
 	 */
-	public void receiver() throws Exception {
-
-		String value = "";
-		if(null != in)
+	public void receiver(String info) throws Exception
+	{
+		// 设置发送的第一条消息
+		showText.append(Tools.getChatFormatString(this.info[0], info));
+		while (flag)
 		{
-			while (null != (value = in.readLine())) {
-				if (!"".equals(value.trim())) {
-					showText.append(info[0]+"  "+new Date(System.currentTimeMillis()).toLocaleString()+"\n    "+value+"\n");
+			try
+			{
+				String value = NIOTools.byteBufferToString(channel);
+				if (!"".equals(value.trim()))
+				{
+					showText.append(Tools.getChatFormatString(this.info[0],value));
+					showText.setCaretPosition(showText.getText().length());
 				}
-			}
+			} catch (Exception e1)
+			{
+				flag = false;
+				e1.printStackTrace();
+		    }
 		}
-
+		
 		return;
 	}
-
+	
+	public void setChannel(SocketChannel channel)
+	{
+		this.channel = channel;
+	}
 }

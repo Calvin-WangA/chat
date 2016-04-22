@@ -8,7 +8,7 @@ import util.NIOTools;
 
 public class SocketClient {
 
-	private static final int CLIENT_PORT = 50008;
+	private static final int CLIENT_PORT = 1234;
 	
 	private static final String HOST = "localhost";
 	
